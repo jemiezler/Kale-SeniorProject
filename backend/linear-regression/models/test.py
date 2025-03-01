@@ -3,8 +3,8 @@ import joblib
 # Load model
 model = joblib.load("model.pkl")
 
-# Check if model stores feature names
+# Print feature names
 if hasattr(model, "feature_names_in_"):
-    print("✅ Model feature names:", model.feature_names_in_)
+    print("✅ Model was trained with these features:", model.feature_names_in_)
 else:
-    print("⚠️ Model does NOT have `feature_names_in_`. You need to provide feature names manually.")
+    print("⚠️ Model does NOT have feature names. Check training data.")
