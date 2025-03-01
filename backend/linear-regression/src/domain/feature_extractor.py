@@ -90,7 +90,7 @@
 import cv2
 import numpy as np
 import pandas as pd
-from skimage.feature import local_binary_pattern
+from skimage.feature import local_binary_pattern, graycomatrix, graycoprops
 
 class FeatureExtractor:
     """Extracts only the required features from images to match the model input."""
@@ -103,31 +103,50 @@ class FeatureExtractor:
         return {f"LBP_{i}": hist[i] for i in range(8)}  # ✅ Extracting only LBP_0 to LBP_7
 
     @staticmethod
-    def extract_all_features(image: np.ndarray, temp: float):
-        """Extracts only the features that the model requires."""
-        image_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    def extract_glcm_features(image_gray):
+        """Extracts GLCM (Gray-Level Co-occurrence Matrix) texture features."""
+        distances = [1]  # Distance of pixel pairs
+        angles = [0]  # Horizontal direction
+        glcm = graycomatrix(image_gray, distances=distances, angles=angles, symmetric=True, normed=True)
 
-        # ✅ Extract only the LBP features
-        lbp_features = FeatureExtractor.extract_lbp_features(image_gray)
+        glcm_features = {
+            "GLCM_contrast": graycoprops(glcm, 'contrast')[0, 0],
+            "GLCM_dissimilarity": graycoprops(glcm, 'dissimilarity')[0, 0],
+            "GLCM_homogeneity": graycoprops(glcm, 'homogeneity')[0, 0],
+            "GLCM_energy": graycoprops(glcm, 'energy')[0, 0],
+            "GLCM_correlation": graycoprops(glcm, 'correlation')[0, 0],
+        }
+        return glcm_features
 
-        # ✅ Compute only the required derived color features
+    @staticmethod
+    def extract_color_features(image):
+        """Extracts mean and standard deviation of RGB channels + Cyan computation."""
         mean_rgb = np.mean(image, axis=(0, 1))  # Mean RGB values
+        std_rgb = np.std(image, axis=(0, 1))  # Std RGB values
         cyan = mean_rgb[1] + mean_rgb[2]  # G + B
-        magenta = mean_rgb[0] + mean_rgb[2]  # R + B
-        brightness = (mean_rgb[0] + mean_rgb[1] + mean_rgb[2]) / 3  # Average RGB
-        chroma = max(mean_rgb) - min(mean_rgb)  # Max - Min RGB
 
         color_features = {
+            "Mean_RGB_R": mean_rgb[0], "Std_RGB_R": std_rgb[0],
+            "Mean_RGB_G": mean_rgb[1], "Std_RGB_G": std_rgb[1],
+            "Mean_RGB_B": mean_rgb[2], "Std_RGB_B": std_rgb[2],
             "Cyan": cyan,
-            "Magenta": magenta,
-            "Brightness": brightness,
-            "Chroma": chroma
         }
+        return color_features
+
+    @staticmethod
+    def extract_all_features(image: np.ndarray, temp: float):
+        """Extracts all the required features from the image."""
+        image_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+        # ✅ Extract features
+        lbp_features = FeatureExtractor.extract_lbp_features(image_gray)
+        glcm_features = FeatureExtractor.extract_glcm_features(image_gray)
+        color_features = FeatureExtractor.extract_color_features(image)
 
         # ✅ Add temperature as a feature
         color_features["Temp"] = temp
 
         # ✅ Combine all extracted features
-        all_features = {**lbp_features, **color_features}
+        all_features = {**color_features, **glcm_features, **lbp_features}
 
         return all_features

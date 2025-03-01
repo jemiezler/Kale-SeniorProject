@@ -2,6 +2,7 @@ from domain.feature_extractor import FeatureExtractor
 from infrastructure.model_loader import ModelLoader
 from infrastructure.image_loader import ImageLoader
 import pandas as pd
+import numpy as np
 
 # Load the trained model
 model_loader = ModelLoader("models/model.pkl")
@@ -12,17 +13,30 @@ class AnalysisService:
 
     @staticmethod
     def analyze_image(image_bytes: bytes, temp: float):
-        """Load image → Extract features → Predict."""
+        """Load image → Extract features → Scale features → Predict."""
         image = ImageLoader.load(image_bytes)
         features = FeatureExtractor.extract_all_features(image, temp)
 
-        # ✅ Convert to DataFrame with correct column names
+        # ✅ Convert NumPy types to standard Python types
+        features = {k: float(v) if isinstance(v, (np.integer, np.floating)) else v for k, v in features.items()}
+
+        # ✅ Convert to DataFrame
         features_df = pd.DataFrame([features])
 
-        # ✅ Keep only the features expected by the model
-        filtered_features = features_df[model_loader.expected_features]  # Ensure column order matches training data
+        # ✅ Ensure correct column order
+        if model_loader.expected_features is None:
+            raise ValueError("❌ Model `expected_features` is not defined.")
 
-        # ✅ Ensure DataFrame format (instead of raw NumPy array)
-        prediction = model_loader.predict(filtered_features)  # ✅ Now retains feature names
+        missing_features = [f for f in model_loader.expected_features if f not in features_df.columns]
+        if missing_features:
+            raise ValueError(f"❌ Missing required features: {missing_features}")
 
-        return {"prediction": prediction, "features": features}
+        filtered_features = features_df[model_loader.expected_features]
+
+        # ✅ Apply the same scaler that was used in training
+        prediction = model_loader.predict(filtered_features)
+
+        return {
+            "prediction": float(prediction),  # Convert to float to ensure proper JSON serialization
+            "features": features  # Already converted to Python types
+        }

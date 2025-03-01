@@ -1,34 +1,34 @@
+from sklearn.preprocessing import StandardScaler
 import joblib
 import pandas as pd
-import logging
-
-# Initialize Logger
-logger = logging.getLogger(__name__)
 
 class ModelLoader:
-    """Loads trained ML model and extracts expected features."""
-
-    def __init__(self, model_path: str):
+    def __init__(self, model_path: str, scaler_path: str = None):
         self.model_path = model_path
         self.model = None
-        self.expected_features = None  # Store expected features
+        self.scaler = None  # Store the scaler
+        self.expected_features = None
+
+        if scaler_path:
+            self.scaler = joblib.load(scaler_path)  # Load the same scaler used in training
 
     def load(self):
-        """Load model from pickle file and extract expected feature names."""
-        try:
-            self.model = joblib.load(self.model_path)
-            if hasattr(self.model, "feature_names_in_"):  # Check if the model stores feature names
-                self.expected_features = list(self.model.feature_names_in_)
-                logger.info(f"✅ Model loaded successfully! Expected features: {self.expected_features}")
-            else:
-                logger.warning("⚠️ Model does not have `feature_names_in_`. Using default feature selection.")
-                self.expected_features = None  # Handle models that don't store feature names
-        except Exception as e:
-            logger.error(f"❌ Failed to load model: {e}")
-            raise e
+        """Load model and define expected feature names."""
+        self.model = joblib.load(self.model_path)
+
+        if hasattr(self.model, "feature_names_in_"):
+            self.expected_features = list(self.model.feature_names_in_)
+        else:
+            print("⚠️ Model does not have `feature_names_in_`. Define manually.")
+            self.expected_features = [
+                'Mean_RGB_R', 'Std_RGB_R', 'Mean_RGB_G', 'Std_RGB_G', 'Mean_RGB_B', 'Std_RGB_B',
+                'GLCM_contrast', 'GLCM_dissimilarity', 'GLCM_homogeneity', 'GLCM_energy', 'GLCM_correlation',
+                'LBP_0', 'LBP_1', 'LBP_2', 'LBP_3', 'LBP_4', 'LBP_5', 'LBP_6', 'LBP_7', 'Temp', 'Cyan'
+            ]
+            self.model.feature_names_in_ = self.expected_features  # Manually define feature names
 
     def predict(self, features: pd.DataFrame):
-        """Predict output based on extracted features."""
-        if self.model is None:
-            raise ValueError("Model has not been loaded. Call `load()` first.")
+        """Predict while applying scaling if necessary."""
+        if self.scaler:
+            features = self.scaler.transform(features)  # ✅ Scale features before prediction
         return self.model.predict(features)[0]
